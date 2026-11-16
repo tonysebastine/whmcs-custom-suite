@@ -1,80 +1,36 @@
-# GST Filing Mapping Guide (GSTR-1 & GSTR-3B)
+# GST Filing Guide (GSTR-1 & GSTR-3B)
 
-This document explains how each column from the WHMCS GST Invoice Report maps directly to official Indian GST return tables, and how to use the **1-Click GSTR-1 JSON Export** feature.
+## GSTR-1 JSON Export
 
----
+Click the **Download GSTR-1 JSON (GST Portal)** button in the report header.
 
-## ⚡ 1-Click "Download GSTR-1 JSON" (Direct Upload to GST Portal)
+- Generates `GSTR1_<GSTIN>_<MMYYYY>.json` matching GST Offline Tool schema v2.0.
+- Contains:
+  - `b2b` section grouped by client GSTIN with invoice numbers, dates (`DD-MM-YYYY`), taxable values, POS codes, and tax rates.
+  - `b2cs` section aggregated by 2-digit POS code and tax rates.
+  - `hsn` summary aggregated by SAC code (`998319`, `998315`, `998314`, `998313`).
 
-The report now features a green **Download GSTR-1 JSON (GST Portal)** button at the top of the filters panel.
+### Portal Upload Steps
+1. Download the JSON for your filing month.
+2. Log in at `services.gst.gov.in` -> **Returns Dashboard**.
+3. Select Period -> **Prepare Offline** -> **Upload**.
+4. Select the `.json` file.
 
-### What the JSON Payload Generates:
-1. **`b2b` (Section 4)**: 
-   - Grouped by recipient GSTIN (`ctin`).
-   - Generates invoice numbers (`inum`), dates (`idt` in `DD-MM-YYYY`), total values (`val`), Place of Supply (`pos` 2-digit code), Reverse Charge (`rchrg = 'N'`), and item tax breakdown (`rt = 18%`, taxable value `txval`, `iamt`, `camt`, `samt`).
-2. **`b2cs` (Section 7 - B2C Others)**:
-   - Aggregated by Place of Supply (`pos`), Supply Type (`INTRA` vs `INTER`), and Rate (`18%`).
-3. **`hsn` (Section 12 - HSN/SAC Summary)**:
-   - Aggregates invoice lines into SAC codes (`998319`, `998315`, `998314`, `998313`) with taxable values and tax splits.
+## Manual Field Mapping
 
-### How to Upload:
-1. In your WHMCS Admin, open the report, pick your **Financial Month**, and click **Download GSTR-1 JSON**.
-2. Save the generated `GSTR1_<GSTIN>_<MMYYYY>.json` file.
-3. Log into **[services.gst.gov.in](https://services.gst.gov.in)** &rarr; **Returns Dashboard**.
-4. Select the Return Filing Period &rarr; click **Prepare Offline** &rarr; **Upload**.
-5. Upload the JSON file. The portal automatically populates your B2B, B2C, and HSN tables without manual Excel data-entry!
+### Table 4: B2B Invoices
+Filter by `B2B / B2C: B2B`.
 
----
+- **GSTIN**: Client GSTIN (`tblclients.tax_id`)
+- **Invoice Number / Date**: WHMCS invoice number and date
+- **Taxable Value**: Subtotal
+- **Tax Breakdown**: CGST + SGST (Intra-state) or IGST (Inter-state)
 
-## 📋 Manual Table-by-Table Reference
+### Table 7: B2C Invoices
+Filter by `B2B / B2C: B2C`. Summarize by Place of Supply.
 
-### Table 4: B2B Invoices (Taxable outward supplies to registered persons)
-Filter report by: **`B2B / B2C: B2B`**
-
-| GSTR-1 Field | WHMCS Report Column | Notes |
-|---|---|---|
-| **GSTIN/UIN of Recipient** | Client GSTIN | Must be valid 15-character GSTIN |
-| **Receiver Name** | Client / Company | Client company name or full name |
-| **Invoice Number** | Invoice # | WHMCS sequential invoice number |
-| **Invoice Date** | Invoice Date | Date of invoice generation |
-| **Invoice Value** | Total Invoice (INR) | Gross amount including GST |
-| **Place of Supply (POS)** | Place of Supply | Client's state |
-| **Supply Type** | Computed | Intra-state (CGST+SGST) / Inter-state (IGST) |
-| **Rate** | 18% | Standard rate for hosting/domain IT services |
-| **Taxable Value** | Taxable Value (INR) | Subtotal before tax |
-| **Integrated Tax** | IGST (INR) | Populated when POS &ne; Home State |
-| **Central Tax** | CGST (INR) | Populated when POS = Home State |
-| **State Tax** | SGST (INR) | Populated when POS = Home State |
-
----
-
-### Table 7: B2C (Others) (Supplies to unregistered persons)
-Filter report by: **`B2B / B2C: B2C`**
-
-Summarize by **Place of Supply**:
-- Group taxable values by client state.
-- Apply 18% GST (CGST+SGST or IGST based on location).
-
----
-
-### Table 12: HSN-wise Summary of Outward Supplies
-
-The report includes the detected **HSN/SAC** codes:
-
-| SAC Code | Description | Typical WHMCS Line Items |
-|---|---|---|
-| **`998319`** | Other professional, technical & business services | Domain Registrations, Renewals, Transfers, DNS addons |
-| **`998315`** | Hosting and infrastructure provisioning | Shared, VPS, Dedicated, Cloud Hosting |
-| **`998314`** | IT software design and development | Website design, Web application development, SEO, AMC |
-| **`998313`** | IT consulting & support services | General consulting, setup fees, miscellaneous IT support |
-
----
-
-## 2. GSTR-3B Mapping
-
-### Table 3.1: Details of Outward Supplies and inward supplies liable to reverse charge
-
-| Section | Value from Report |
-|---|---|
-| **(a) Outward taxable supplies (other than zero rated, nil rated and exempted)** | - **Total Taxable Value**: Sum of `Taxable Value (INR)`<br>- **Integrated Tax**: Sum of `IGST (INR)`<br>- **Central Tax**: Sum of `CGST (INR)`<br>- **State/UT Tax**: Sum of `SGST (INR)` |
-| **(b) Outward taxable supplies (zero rated)** | Export invoices to overseas clients (if 0% tax applied) |
+### Table 12: HSN Summary
+- `998319`: Domains and domain addons
+- `998315`: Hosting and server infrastructure
+- `998314`: Web design, development, SEO, AMC
+- `998313`: Other IT consulting and services
