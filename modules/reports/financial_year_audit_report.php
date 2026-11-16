@@ -353,3 +353,4 @@ if (!$isPrintView) {
 </div>
 HTML;
 }
+

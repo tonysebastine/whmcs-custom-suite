@@ -57,3 +57,4 @@ $$\text{Net Bank Realized} = \text{Gross Invoiced} - \text{Credit Applied} - \te
    - Choose **`All`** to verify total book turnover and accounts receivable.
 5. Optionally filter by **Payment Gateway** (e.g., *HDFC SmartGateway* or *CCAvenue*) to reconcile month-by-month settlement payout sheets.
 6. Click **Generate Audit Report** &rarr; use the **CSV Export** button at the bottom to hand off clean, formatted workbooks to your Chartered Accountant (CA).
+
