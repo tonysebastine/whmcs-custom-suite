@@ -2,6 +2,20 @@
 
 All notable changes to the **WHMCS Statutory Tax & Audit Suite** will be documented in this file.
 
+## [1.4.0] - 2026-11-16
+### Added
+- **1-Click GSTR-1 JSON Generator (`Download GSTR-1 JSON`)**:
+  - Implements the official **GST Offline Tool JSON v2.0 Schema** directly inside `gst_invoice_report.php`.
+  - Automatically exports:
+    - `b2b` section grouped by recipient GSTIN with invoice number, date (DD-MM-YYYY), taxable value, and tax breakdown.
+    - `b2cs` section aggregated by 2-digit Place of Supply (POS) and tax rates.
+    - `hsn` section aggregating outward supplies by SAC code (`998319`, `998315`, `998314`, `998313`).
+  - Single-click browser download of `GSTR1_<GSTIN>_<MMYYYY>.json` ready for direct upload to `services.gst.gov.in`.
+- **State to 2-Digit GST Code Converter**:
+  - Added helper function `w3GetGstStateCode()` resolving Indian states/UTs to official 2-digit GST state codes (e.g. Kerala -> `32`, Delhi -> `07`, Maharashtra -> `27`).
+
+---
+
 ## [1.3.0] - 2026-11-16
 ### Added
 - **Financial Year Audit Report (`financial_year_audit_report.php`)**:
