@@ -2,9 +2,11 @@
 
 /**
  * GST Invoice Report for GSTR-1 & GSTR-3B Filing
- * Designed for WHMCS 8.x - Native Admin Report Module
+ * Compatible with WHMCS 7.x, 8.x, 8.13+ & modern PHP 7.4 through 8.2, 8.3, 8.4, 8.5+
  * Place in: modules/reports/gst_invoice_report.php
  */
+
+declare(strict_types=1);
 
 use WHMCS\Carbon;
 use WHMCS\Database\Capsule;
@@ -17,55 +19,83 @@ $reportdata["title"] = "GST Invoice Report (GSTR-1 / GSTR-3B)";
 $reportdata["description"] = "Comprehensive GST invoice report with B2B/B2C classification, Place of Supply, and CGST/SGST/IGST breakdown for GST return filing.";
 $reportdata["currencyselections"] = true;
 
-// 1. Home State Selection (for Intra-state vs Inter-state determination)
-$homeState = App::getFromRequest('homestate');
-if (!$homeState) {
+// 1. Home State Selection (Intra-state vs Inter-state determination)
+$homeState = (string) (class_exists('App') && method_exists('App', 'getFromRequest') 
+    ? App::getFromRequest('homestate') 
+    : ($_REQUEST['homestate'] ?? ''));
+if (trim($homeState) === '') {
     $homeState = 'Kerala'; // Default home state
 }
 
 // 2. Status Filter (Paid, Unpaid, All, Cancelled, Refunded, Payment Pending)
-$statusFilter = App::getFromRequest('statusfilter');
-if (!$statusFilter) {
+$statusFilter = (string) (class_exists('App') && method_exists('App', 'getFromRequest') 
+    ? App::getFromRequest('statusfilter') 
+    : ($_REQUEST['statusfilter'] ?? ''));
+if (trim($statusFilter) === '') {
     $statusFilter = 'Paid';
 }
 
 // 2b. Invoice Type Filter (All, B2B, B2C)
-$typeFilter = App::getFromRequest('typefilter');
-if (!$typeFilter) {
+$typeFilter = (string) (class_exists('App') && method_exists('App', 'getFromRequest') 
+    ? App::getFromRequest('typefilter') 
+    : ($_REQUEST['typefilter'] ?? ''));
+if (trim($typeFilter) === '') {
     $typeFilter = 'All';
 }
 
-// 3. Date Range Selection
-$range = App::getFromRequest('range');
-if (!$range) {
-    $today = Carbon::today()->endOfDay();
-    $firstOfMonth = Carbon::today()->startOfMonth();
-    $range = $firstOfMonth->toAdminDateFormat() . ' - ' . $today->toAdminDateFormat();
+// 3. Date Range Selection (Cross-version compatible)
+$range = (string) (class_exists('App') && method_exists('App', 'getFromRequest') 
+    ? App::getFromRequest('range') 
+    : ($_REQUEST['range'] ?? ''));
+
+if (trim($range) === '') {
+    if (class_exists(Carbon::class) && method_exists(Carbon::class, 'today')) {
+        $today = Carbon::today()->endOfDay();
+        $firstOfMonth = Carbon::today()->startOfMonth();
+        $range = $firstOfMonth->toAdminDateFormat() . ' - ' . $today->toAdminDateFormat();
+    } else {
+        $range = date('01/m/Y') . ' - ' . date('t/m/Y');
+    }
 }
 
-$dateRange = Carbon::parseDateRangeValue($range);
-$queryStartDate = $dateRange['from']->startOfDay()->toDateTimeString();
-$queryEndDate = $dateRange['to']->endOfDay()->toDateTimeString();
+// Parse date range safely across WHMCS 7.x through 8.x+
+if (class_exists(Carbon::class) && method_exists(Carbon::class, 'parseDateRangeValue')) {
+    $dateRange = Carbon::parseDateRangeValue($range);
+    $queryStartDate = $dateRange['from']->startOfDay()->toDateTimeString();
+    $queryEndDate = $dateRange['to']->endOfDay()->toDateTimeString();
+} else {
+    $parts = explode(' - ', $range);
+    $startRaw = trim($parts[0] ?? date('Y-m-01'));
+    $endRaw = trim($parts[1] ?? date('Y-m-t'));
+    $queryStartDate = date('Y-m-d 00:00:00', strtotime(str_replace('/', '-', $startRaw)));
+    $queryEndDate = date('Y-m-d 23:59:59', strtotime(str_replace('/', '-', $endRaw)));
+}
 
-$currencyID = (int) $currencyid;
+$currencyID = isset($currencyid) ? (int) $currencyid : 1;
+$isPrintView = isset($print) && (bool) $print;
 
 // Filter UI
-if (!$print) {
+if (!$isPrintView) {
     $statusOptions = '';
     $statuses = ['Paid', 'Unpaid', 'All', 'Cancelled', 'Refunded', 'Payment Pending'];
     foreach ($statuses as $opt) {
         $selected = ($statusFilter === $opt) ? 'selected' : '';
-        $statusOptions .= "<option value=\"{$opt}\" {$selected}>{$opt}</option>";
+        $statusOptions .= "<option value=\"" . htmlspecialchars($opt, ENT_QUOTES, 'UTF-8') . "\" {$selected}>" . htmlspecialchars($opt, ENT_QUOTES, 'UTF-8') . "</option>";
     }
 
     $typeOptions = '';
     foreach (['All', 'B2B', 'B2C'] as $tOpt) {
         $selected = ($typeFilter === $tOpt) ? 'selected' : '';
-        $typeOptions .= "<option value=\"{$tOpt}\" {$selected}>{$tOpt}</option>";
+        $typeOptions .= "<option value=\"" . htmlspecialchars($tOpt, ENT_QUOTES, 'UTF-8') . "\" {$selected}>" . htmlspecialchars($tOpt, ENT_QUOTES, 'UTF-8') . "</option>";
     }
 
+    $safeReport = htmlspecialchars((string) ($report ?? 'gst_invoice_report'), ENT_QUOTES, 'UTF-8');
+    $safeCurrencyId = (int) $currencyID;
+    $safeRange = htmlspecialchars($range, ENT_QUOTES, 'UTF-8');
+    $safeHomeState = htmlspecialchars($homeState, ENT_QUOTES, 'UTF-8');
+
     $reportdata['headertext'] = <<<HTML
-<form method="post" action="reports.php?report={$report}&currencyid={$currencyid}">
+<form method="post" action="reports.php?report={$safeReport}&currencyid={$safeCurrencyId}">
     <div class="report-filters-wrapper">
         <div class="inner-container">
             <h3>Filters</h3>
@@ -80,7 +110,7 @@ if (!$print) {
                             <input id="inputFilterDate"
                                    type="text"
                                    name="range"
-                                   value="{$range}"
+                                   value="{$safeRange}"
                                    class="form-control date-picker-search"
                             />
                         </div>
@@ -92,7 +122,7 @@ if (!$print) {
                         <input id="inputHomeState"
                                type="text"
                                name="homestate"
-                               value="{$homeState}"
+                               value="{$safeHomeState}"
                                class="form-control"
                                placeholder="e.g. Kerala"
                         />
@@ -195,20 +225,22 @@ $countB2C = 0;
 
 $normHomeState = strtolower(trim($homeState));
 
-// Helper function to resolve HSN/SAC code from line items
+// Helper function to resolve HSN/SAC code from line items (PHP 8.2-8.5+ safe)
 if (!function_exists('w3ResolveHsnSac')) {
-    function w3ResolveHsnSac($type, $description) {
-        $descLower = strtolower($description);
-        if (strpos($descLower, 'website design') !== false ||
-            strpos($descLower, 'web development') !== false ||
-            strpos($descLower, 'seo') !== false ||
-            strpos($descLower, 'amc') !== false) {
+    function w3ResolveHsnSac(?string $type, ?string $description): string {
+        $descLower = strtolower((string) $description);
+        $typeSafe = (string) $type;
+
+        if (str_contains($descLower, 'website design') ||
+            str_contains($descLower, 'web development') ||
+            str_contains($descLower, 'seo') ||
+            str_contains($descLower, 'amc')) {
             return '998314'; // IT design and development
-        } elseif ($type === 'Hosting') {
+        } elseif ($typeSafe === 'Hosting') {
             return '998315'; // Hosting and domain space services
-        } elseif ($type === 'PromoHosting' || $type === 'DomainHosting' || $type === 'AddFunds') {
+        } elseif ($typeSafe === 'PromoHosting' || $typeSafe === 'DomainHosting' || $typeSafe === 'AddFunds') {
             return '998315'; // Hosting service category
-        } elseif (strpos($type, 'Domain') !== false || strpos($type, 'Addon') !== false) {
+        } elseif (str_contains($typeSafe, 'Domain') || str_contains($typeSafe, 'Addon')) {
             return '998319'; // Other professional, technical and business services (Domains)
         }
         return '998313'; // Default IT infrastructure / consulting services
@@ -226,25 +258,31 @@ if (!empty($invoiceIds)) {
         ->get();
 
     foreach ($items as $item) {
-        $code = w3ResolveHsnSac($item->type, $item->description);
-        if (!empty($code)) {
+        $code = w3ResolveHsnSac($item->type ?? '', $item->description ?? '');
+        if ($code !== '') {
             $invoiceHsnMap[$item->invoiceid][$code] = $code;
         }
     }
 }
 
 foreach ($results as $row) {
-    $invNumber = $row->invoicenum ? $row->invoicenum : $row->id;
-    $invLink = "<a href=\"invoices.php?action=edit&id={$row->id}\" target=\"_blank\">{$invNumber}</a>";
+    $invNumber = (!empty($row->invoicenum)) ? $row->invoicenum : (string) $row->id;
+    $invLink = "<a href=\"invoices.php?action=edit&id=" . (int) $row->id . "\" target=\"_blank\">" . htmlspecialchars((string) $invNumber, ENT_QUOTES, 'UTF-8') . "</a>";
     
-    $invDate = fromMySQLDate($row->date);
-    $datePaid = ($row->datepaid && $row->datepaid !== '0000-00-00 00:00:00') ? fromMySQLDate($row->datepaid) : '-';
+    $invDate = function_exists('fromMySQLDate') ? fromMySQLDate($row->date) : (string) $row->date;
+    $datePaid = (!empty($row->datepaid) && $row->datepaid !== '0000-00-00 00:00:00' && $row->datepaid !== '0000-00-00') 
+        ? (function_exists('fromMySQLDate') ? fromMySQLDate($row->datepaid) : (string) $row->datepaid)
+        : '-';
 
-    $clientName = trim($row->companyname) ? $row->companyname : trim("{$row->firstname} {$row->lastname}");
-    $clientGSTIN = trim($row->tax_id);
+    $firstName = trim((string) ($row->firstname ?? ''));
+    $lastName = trim((string) ($row->lastname ?? ''));
+    $company = trim((string) ($row->companyname ?? ''));
+    $clientName = ($company !== '') ? $company : trim("{$firstName} {$lastName}");
+
+    $clientGSTIN = trim((string) ($row->tax_id ?? ''));
     
     // B2B vs B2C
-    $isB2B = !empty($clientGSTIN);
+    $isB2B = ($clientGSTIN !== '');
     $gstType = $isB2B ? '<span class="label label-info">B2B</span>' : '<span class="label label-default">B2C</span>';
     if ($isB2B) {
         $countB2B++;
@@ -252,21 +290,23 @@ foreach ($results as $row) {
         $countB2C++;
     }
 
-    $pos = trim($row->client_state) ? $row->client_state : $row->client_country;
-    $normClientState = strtolower(trim($row->client_state));
+    $clientState = trim((string) ($row->client_state ?? ''));
+    $clientCountry = trim((string) ($row->client_country ?? ''));
+    $pos = ($clientState !== '') ? $clientState : $clientCountry;
+    $normClientState = strtolower($clientState);
 
-    $subtotal = (float) $row->subtotal;
-    $tax1 = (float) $row->tax;
-    $tax2 = (float) $row->tax2;
+    $subtotal = (float) ($row->subtotal ?? 0.0);
+    $tax1 = (float) ($row->tax ?? 0.0);
+    $tax2 = (float) ($row->tax2 ?? 0.0);
     $totalTax = $tax1 + $tax2;
-    $total = (float) $row->total;
+    $total = (float) ($row->total ?? 0.0);
 
     // Determine CGST + SGST vs IGST
     $cgst = 0.0;
     $sgst = 0.0;
     $igst = 0.0;
 
-    $isIntraState = ($normClientState === $normHomeState && !empty($normHomeState));
+    $isIntraState = ($normClientState === $normHomeState && $normHomeState !== '');
 
     if ($isIntraState) {
         // Both taxes apply (CGST + SGST)
@@ -295,31 +335,31 @@ foreach ($results as $row) {
         $invLink,
         $invDate,
         $datePaid,
-        $clientName,
-        $clientGSTIN ? $clientGSTIN : 'N/A',
-        $hsnCodes,
+        htmlspecialchars($clientName, ENT_QUOTES, 'UTF-8'),
+        ($clientGSTIN !== '') ? htmlspecialchars($clientGSTIN, ENT_QUOTES, 'UTF-8') : 'N/A',
+        htmlspecialchars($hsnCodes, ENT_QUOTES, 'UTF-8'),
         $gstType,
-        $pos,
-        number_format($subtotal, 2),
-        number_format($cgst, 2),
-        number_format($sgst, 2),
-        number_format($igst, 2),
-        number_format($totalTax, 2),
-        number_format($total, 2),
-        $row->status
+        htmlspecialchars($pos, ENT_QUOTES, 'UTF-8'),
+        number_format($subtotal, 2, '.', ''),
+        number_format($cgst, 2, '.', ''),
+        number_format($sgst, 2, '.', ''),
+        number_format($igst, 2, '.', ''),
+        number_format($totalTax, 2, '.', ''),
+        number_format($total, 2, '.', ''),
+        htmlspecialchars((string) ($row->status ?? ''), ENT_QUOTES, 'UTF-8')
     ];
 }
 
 // Summary Box
-$formattedTaxable = formatCurrency($sumTaxable);
-$formattedCGST = formatCurrency($sumCGST);
-$formattedSGST = formatCurrency($sumSGST);
-$formattedIGST = formatCurrency($sumIGST);
-$formattedTotalTax = formatCurrency($sumTotalTax);
-$formattedTotal = formatCurrency($sumTotal);
+$formattedTaxable = function_exists('formatCurrency') ? formatCurrency($sumTaxable) : number_format($sumTaxable, 2);
+$formattedCGST = function_exists('formatCurrency') ? formatCurrency($sumCGST) : number_format($sumCGST, 2);
+$formattedSGST = function_exists('formatCurrency') ? formatCurrency($sumSGST) : number_format($sumSGST, 2);
+$formattedIGST = function_exists('formatCurrency') ? formatCurrency($sumIGST) : number_format($sumIGST, 2);
+$formattedTotalTax = function_exists('formatCurrency') ? formatCurrency($sumTotalTax) : number_format($sumTotalTax, 2);
+$formattedTotal = function_exists('formatCurrency') ? formatCurrency($sumTotal) : number_format($sumTotal, 2);
 $totalInvoices = count($results);
 
-if (!$print) {
+if (!$isPrintView) {
     $reportdata['headertext'] .= <<<HTML
 <div style="margin-top: 15px; margin-bottom: 20px;">
     <div class="row">
@@ -364,4 +404,3 @@ if (!$print) {
 </div>
 HTML;
 }
-

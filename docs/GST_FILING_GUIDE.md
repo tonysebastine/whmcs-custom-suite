@@ -56,3 +56,4 @@ The report includes the detected **HSN/SAC** codes:
 |---|---|
 | **(a) Outward taxable supplies (other than zero rated, nil rated and exempted)** | - **Total Taxable Value**: Sum of `Taxable Value (INR)`<br>- **Integrated Tax**: Sum of `IGST (INR)`<br>- **Central Tax**: Sum of `CGST (INR)`<br>- **State/UT Tax**: Sum of `SGST (INR)` |
 | **(b) Outward taxable supplies (zero rated)** | Export invoices to overseas clients (if 0% tax applied) |
+

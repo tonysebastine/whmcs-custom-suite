@@ -62,3 +62,4 @@ chmod 644 modules/reports/gst_invoice_report.php
 ## Step 5: Exporting for Tax Filing
 At the bottom of the report page:
 - Click **CSV Export** to download the clean spreadsheet for filing via the GST Offline Tool or your Chartered Accountant (CA).
+
