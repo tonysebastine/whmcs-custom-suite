@@ -1,6 +1,18 @@
 # Changelog
 
-All notable changes to the **WHMCS GST Invoice Report** will be documented in this file.
+All notable changes to the **WHMCS Statutory Tax & Audit Suite** will be documented in this file.
+
+## [1.3.0] - 2026-11-16
+### Added
+- **Financial Year Audit Report (`financial_year_audit_report.php`)**:
+  - Automated Financial Year selection (April 1 to March 31).
+  - Detailed Statutory Audit columns including Sales Turnover, Output Tax, Credit applied, Gateway charges (MDR), and Net Realized Revenue.
+  - Integration with `tblaccounts` to extract real transaction IDs and fees.
+  - Payment Gateway dropdown filter (e.g. HDFC SmartGateway, CCAvenue, Stripe, PayPal) for direct bank and aggregator reconciliation.
+- **Audit Documentation (`docs/AUDIT_REPORT_GUIDE.md`)**:
+  - Complete documentation detailing accounting definitions, turnover reconciliation formulas, and CA audit workflows.
+
+---
 
 ## [1.2.0] - 2026-11-16
 ### Added
